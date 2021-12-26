@@ -76,6 +76,22 @@ Host script results:
 |     Current user access: READ/WRITE
 ...
 
+#### CRACKMAPEXEC ####
+# credit: https://book.hacktricks.xyz/pentesting/5985-5986-pentesting-winrm
+
+# Brute force
+$ crackmapexec winrm <IP> -d <Domain Name> -u usernames.txt -p passwords.txt
+
+# Just check a pair of credentials
+## Username + Password + CMD command execution
+$ crackmapexec winrm <IP> -d <Domain Name> -u <username> -p <password> -x "whoami"
+
+## Username + Hash + PS command execution
+$ crackmapexec winrm <IP> -d <Domain Name> -u <username> -H <HASH> -X '$PSVersionTable'
+
+# Crackmapexec won't give you an interactive shell, but it will check if the creds are valid to access winrm
+
+
 #### SMBMAP ####
 
 # check for guest access
