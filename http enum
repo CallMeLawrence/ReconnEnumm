@@ -1,0 +1,12 @@
+#### HTTPie ####
+
+# never knew this existed till recently honestly ... felt cute, might remove later
+# grab a quick output of the headers from something that uses http.
+
+$ http -p h $target:8080
+
+HTTP/1.1 200 
+Content-Length: 1024
+Content-Type: text/html;charset=ISO-8859-1
+Date: Sun, 26 Dec 2021 22:05:11 GMT
+Set-Cookie: JSESSIONID=1DE1BE13F59DE272B71A83B13560B111; Path=/; HttpOnly
